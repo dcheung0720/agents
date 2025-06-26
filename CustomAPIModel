@@ -1,0 +1,44 @@
+import { BaseChatModel } from '@langchain/core/language_models/chat'
+import { AIMessage, BaseMessage } from '@langchain/core/messages'
+
+interface CustomModelOptions {
+    endpoint: string
+    apiKey?: string
+    temperature?: number
+}
+
+export class CustomAPIModel extends BaseChatModel {
+    endpoint: string
+    apiKey?: string
+    temperature: number
+
+    constructor(options: CustomModelOptions) {
+        super()
+        this.endpoint = options.endpoint
+        this.apiKey = options.apiKey
+        this.temperature = options.temperature ?? 0.7
+    }
+
+    _llmType(): string {
+        return 'custom_api_model'
+    }
+
+    async _call(messages: BaseMessage[]): Promise<string> {
+        const prompt = messages.map((m) => m.content).join('\n')
+
+        const res = await fetch(this.endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(this.apiKey && { 'Authorization': `Bearer ${this.apiKey}` })
+            },
+            body: JSON.stringify({
+                prompt,
+                temperature: this.temperature
+            })
+        })
+
+        const data = await res.json()
+        return data.result || data.text || ''
+    }
+}
