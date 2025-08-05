@@ -1,36 +1,29 @@
 import streamlit as st
-from docx import Document
-from docx.oxml.table import CT_Tbl
-from docx.oxml.text.paragraph import CT_P
+import docx2pdf
+import tempfile
+import base64
+import os
 
-st.title("DOCX Viewer with Preserved Order")
+st.title("DOCX Viewer with Full Formatting")
 
 uploaded_file = st.file_uploader("Upload a .docx file", type="docx")
 
-if uploaded_file is not None:
-    doc = Document(uploaded_file)
-    html_content = ""
+if uploaded_file:
+    # Save uploaded file to a temporary DOCX
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_docx:
+        tmp_docx.write(uploaded_file.read())
+        tmp_docx_path = tmp_docx.name
 
-    # Helper: iterate through elements in order
-    def iter_block_items(parent):
-        for child in parent.element.body:
-            if isinstance(child, CT_P):
-                yield doc.paragraphs[len(list(child.xpath("preceding-sibling::w:p")))]
-            elif isinstance(child, CT_Tbl):
-                yield doc.tables[len(list(child.xpath("preceding-sibling::w:tbl")))]
+    # Convert DOCX to PDF
+    tmp_pdf_path = tmp_docx_path.replace(".docx", ".pdf")
+    docx2pdf.convert(tmp_docx_path, tmp_pdf_path)
 
-    # Build HTML
-    for block in iter_block_items(doc):
-        if isinstance(block, type(doc.paragraphs[0])):  # Paragraph
-            if block.text.strip():
-                html_content += f"<p>{block.text}</p>"
-        else:  # Table
-            html_content += "<table border='1' style='border-collapse:collapse; width:100%; margin-top:10px;'>"
-            for row in block.rows:
-                html_content += "<tr>"
-                for cell in row.cells:
-                    html_content += f"<td style='padding:5px;'>{cell.text}</td>"
-                html_content += "</tr>"
-            html_content += "</table>"
+    # Display PDF in Streamlit
+    with open(tmp_pdf_path, "rb") as pdf_file:
+        base64_pdf = base64.b64encode(pdf_file.read()).decode("utf-8")
+        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>'
+        st.markdown(pdf_display, unsafe_allow_html=True)
 
-    st.markdown(html_content, unsafe_allow_html=True)
+    # Clean up
+    os.remove(tmp_docx_path)
+    os.remove(tmp_pdf_path)
